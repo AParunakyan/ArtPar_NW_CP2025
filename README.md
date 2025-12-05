@@ -27,6 +27,6 @@ sudo systemctl start mongod
 cd backend
 uvicorn main:app --reload
 
-# 5. Запускаем сайт
+# 6. Запускаем сайт
 cd frontend
 python3 -m http.server 8080
