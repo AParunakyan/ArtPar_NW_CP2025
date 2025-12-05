@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Task Tracker</title>
+    <style>
+        body {font-family: Arial, sans-serif; margin: 20px; background: #f4f6f9;}
+        h1, h2 {color: #2c3e50;}
+        table {width: 100%; border-collapse: collapse; margin: 15px 0; background: white;}
+        th, td {border: 1px solid #ddd; padding: 10px; text-align: left;}
+        th {background: #3498db; color: white;}
+        input, select, button {padding: 8px; margin: 5px; border-radius: 4px; border: 1px solid #ccc;}
+        button {background: #2ecc71; color: white; cursor: pointer;}
+        button:hover {background: #27ae60;}
+        .filters {padding: 15px; background: white; border-radius: 8px; margin-bottom: 20px;}
+    </style>
+</head>
+<body>
+    <h1>Task Tracker</h1>
+
+    <h2>Все задачи</h2>
+    <div class="filters">
+        <select id="statusFilter">
+            <option value="">Все статусы</option>
+            <option value="New">Новая</option>
+            <option value="In Progress">В работе</option>
+            <option value="Done">Выполнена</option>
+        </select>
+        <select id="priorityFilter">
+            <option value="">Все приоритеты</option>
+            <option value="Low">Низкий</option>
+            <option value="Medium">Средний</option>
+            <option value="High">Высокий</option>
+        </select>
+        <input type="text" id="assigneeFilter" placeholder="ID исполнителя (например 671f8a1b...)">
+        <button onclick="loadTasks()">Фильтр</button>
+        <button onclick="clearFilters()">Сброс</button>
+    </div>
+
+    <table id="tasksTable">
+        <thead><tr><th>ID</th><th>Задача</th><th>Проект</th><th>Исполнитель</th><th>Статус</th><th>Приоритет</th></tr></thead>
+        <tbody></tbody>
+    </table>
+
+    <h2>Пользователи</h2>
+    <table id="usersTable">
+        <thead><tr><th>ID</th><th>Username</th><th>ФИО</th><th>Роль</th><th>Email</th></tr></thead>
+        <tbody></tbody>
+    </table>
+
+    <h2>Загрузка по проектам</h2>
+    <table id="projectSummary"><tbody id="projectSummaryBody"></tbody></table>
+
+    <h2>Задачи пользователя</h2>
+    <div class="filters">
+        <input type="text" id="userIdInput" placeholder="Введите ID пользователя" size="40">
+        <button onclick="loadUserSummary()">Показать</button>
+    </div>
+    <table id="userSummaryTable" style="display:none;">
+        <thead><tr><th>ID</th><th>Задача</th><th>Проект</th></tr></thead>
+        <tbody id="userSummaryBody"></tbody>
+    </table>
+
+    <script>
+        const API = "http://127.0.0.1:8000";
+
+        async function get(url) {
+            try {
+                const r = await fetch(API + url);
+                if (!r.ok) return [];
+                return await r.json();
+            } catch (e) {
+                console.error("Ошибка сети:", e);
+                return [];
+            }
+        }
+
+        async function loadTasks() {
+        let url = "/tasks";
+        const params = new URLSearchParams();
+        const s = document.getElementById("statusFilter").value;
+        const p = document.getElementById("priorityFilter").value;
+        const a = document.getElementById("assigneeFilter").value.trim();
+        if (s) params.append("status", s);
+        if (p) params.append("priority", p);
+        if (a) params.append("assignee", a);
+        if (params.toString()) url += "?" + params;
+
+        const data = await get(url);
+        const tbody = document.querySelector("#tasksTable tbody");
+        tbody.innerHTML = data.length === 0
+            ? "<tr><td colspan='5'>Нет задач</td></tr>"
+            : data.map(t => `
+                <tr>
+                    <td>${t.id}</td>
+                    <td>${t.title}</td>
+                    <td>${t.project_name || "—"}</td>
+                    <td>${t.assignee_name || "—"}</td>
+                    <td>${t.status}</td>
+                    <td>${t.priority}</td>
+                </tr>
+            `).join("");
+        }
+
+        function clearFilters() {
+            document.getElementById("statusFilter").value = "";
+            document.getElementById("priorityFilter").value = "";
+            document.getElementById("assigneeFilter").value = "";
+            loadTasks();
+        }
+
+        async function loadUsers() {
+            const data = await get("/users");
+            const tbody = document.querySelector("#usersTable tbody");
+            tbody.innerHTML = data.length === 0 ? "<tr><td colspan='6'>Нет пользователей</td></tr>" : data.map(u => `
+                <tr>
+                    <td><code>${u.id}</code></td>
+                    <td>${u.username}</td>
+                    <td>${u.full_name}</td>
+                    <td>${u.role}</td>
+                    <td>${u.email}</td>
+                </tr>`).join("");
+        }
+
+        async function loadProjectSummary() {
+        const data = await get("/summary/projects");
+        const tbody = document.getElementById("projectSummaryBody");
+        if (!tbody) return;
+    
+        tbody.innerHTML = data.length === 0
+            ? "<tr><td colspan='4'>Задач нет</td></tr>"
+            : data.map(r => `
+                <tr>
+                    <td>${r.project_name || "—"}</td>
+                    <td>${r.title}</td>
+                    <td>${r.status}</td>
+                    <td>${r.assignee_name || "—"}</td>
+                </tr>
+            `).join("");
+
+        if (data.length > 0 && !document.querySelector("#projectSummary thead")) {
+            document.getElementById("projectSummary").insertAdjacentHTML("afterbegin", `
+                <thead><tr>
+                    <th>Проект</th><th>Задача</th><th>Статус</th><th>Исполнитель</th>
+                </tr></thead>
+            `);
+        }
+}
+
+        async function loadUserSummary() {
+            const id = document.getElementById("userIdInput").value.trim();
+            const data = await get(`/summary/user/${id}`);
+            const tbody = document.getElementById("userSummaryBody");
+            tbody.innerHTML = data.length === 0 ? "<tr><td colspan='3'>Задач нет</td></tr>" 
+            : data.map(r => `
+                <tr>
+                    <td>${r.id}</td>
+                    <td>${r.title}</td>
+                    <td>${r.project_name || "—"}</td>
+                </tr>`).join("");
+            document.getElementById("userSummaryTable").style.display = "table";
+        }
+
+        window.onload = () => {
+            loadTasks();
+            loadUsers();
+            loadProjectSummary();
+            loadUserSummary();
+        };
+    </script>
+</body>
+</html>
