@@ -20,7 +20,7 @@ pip install -r backend/requirements.txt
 
 # 4. Запускаем MongoDB (если не установлен — через Docker)
 sudo docker run -d --name mongo-tt -p 27017:27017 mongo:latest
-# или просто запусти локальный mongod
+# или просто запустите локальный mongod
 sudo systemctl start mongod
 
 # 5. Запускаем сервер
