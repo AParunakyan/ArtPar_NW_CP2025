@@ -27,6 +27,6 @@
 - cd backend
 - uvicorn main:app --reload
 
-# 6. Запускаем сайт
+# 6. Запускаем сайт (в отдельной консоли)
 - cd frontend
 - python3 -m http.server 8080
