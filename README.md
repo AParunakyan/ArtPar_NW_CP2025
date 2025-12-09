@@ -13,7 +13,7 @@
 ```cd ArtPar_NW_CP2025```
 3. Запускаем приложение  
 ```sudo docker-compose up --build```
-4. Открываем проект в браузере
+4. Открываем проект в браузере  
    http://localhost:8000 - главная страница с задачами, фильтрами, сводками  
    http://localhost:8000/docs - Swagger UI
 
