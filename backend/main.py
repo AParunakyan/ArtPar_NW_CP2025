@@ -1,10 +1,19 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
 from typing import List, Optional
 from bson import ObjectId
 from datetime import datetime
-import models
-from database import get_db
+from pydantic import BaseModel
+
+from backend.models import (
+    User, UserCreate, UserUpdate,
+    Project, ProjectCreate, ProjectUpdate,
+    Task, TaskCreate, TaskUpdate
+)
+from backend.database import get_db
 
 app = FastAPI(
     title="Task Tracker",
@@ -21,22 +30,37 @@ app.add_middleware(
 
 
 # === USERS ===
-@app.get("/users", response_model=List[models.User])
+@app.get("/users", response_model=List[User])
 async def get_users(db=Depends(get_db)):
-    return [models.User(**doc, id=str(doc["_id"])) for doc in db.users.find()]
+    return [User(**doc, id=str(doc["_id"])) for doc in db.users.find()]
 
-@app.post("/users", response_model=models.User)
-async def create_user(user: models.UserCreate, db=Depends(get_db)):
+@app.post("/users", response_model=User)
+async def create_user(user: UserCreate, db=Depends(get_db)):
     result = db.users.insert_one(user.model_dump())
     created = db.users.find_one({"_id": result.inserted_id})
 
-    return models.User(
+    return User(
         id=str(created["_id"]),
         username=created["username"],
         full_name=created["full_name"],
         role=created["role"],
         email=created["email"]
     )
+
+@app.put("/users", response_model=User)
+async def update_user(user_id: str, user_update: UserCreate, db=Depends(get_db)):
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=400, detail="Неверный ID")
+    
+    result = db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": user_update.model_dump()}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Пользователь не найден или данные не изменились")
+    
+    updated = db.users.find_one({"_id": ObjectId(user_id)})
+    return User(**updated, id=str(updated["_id"]))
     
 @app.delete("/users")
 async def delete_user(user_id: str, db=Depends(get_db)):
@@ -49,17 +73,17 @@ async def delete_user(user_id: str, db=Depends(get_db)):
 
 
 # === PROJECTS ===
-@app.get("/projects", response_model=List[models.Project])
+@app.get("/projects", response_model=List[Project])
 async def get_projects(db=Depends(get_db)):
     projects = []
     for doc in db.projects.find():
         doc["id"] = str(doc["_id"])
         doc["members"] = [str(m) for m in doc.get("members", [])]
-        projects.append(models.Project(**doc))
+        projects.append(Project(**doc))
     return projects
 
-@app.post("/projects", response_model=models.Project)
-async def create_project(project: models.ProjectCreate, db=Depends(get_db)):
+@app.post("/projects", response_model=Project)
+async def create_project(project: ProjectCreate, db=Depends(get_db)):
     member_ids = []
     for username in project.members:
         user = db.users.find_one({"username": username})
@@ -78,11 +102,38 @@ async def create_project(project: models.ProjectCreate, db=Depends(get_db)):
     result = db.projects.insert_one(data)
     created = db.projects.find_one({"_id": result.inserted_id})
 
-    return models.Project(
+    return Project(
         id=str(created["_id"]),
         name=created["name"],
         members=[str(m) for m in created.get("members", [])]
     )
+
+@app.put("/projects", response_model=Project)
+async def update_project(project_id: str, project_update: ProjectCreate, db=Depends(get_db)):
+    if not ObjectId.is_valid(project_id):
+        raise HTTPException(status_code=400, detail="Неверный ID")
+    
+    member_ids = []
+    for username in project_update.members:
+        user = db.users.find_one({"username": username})
+        if not user:
+            raise HTTPException(status_code=400, detail=f"Пользователь '{username}' не найден")
+        member_ids.append(user["_id"])
+    
+    update_data = {
+        "name": project_update.name,
+        "members": member_ids
+    }
+    
+    result = db.projects.update_one(
+        {"_id": ObjectId(project_id)},
+        {"$set": update_data}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Проект не найден или данные не изменились")
+    
+    updated = db.projects.find_one({"_id": ObjectId(project_id)})
+    return Project(id=str(updated["_id"]), name=updated["name"], members=[str(m) for m in updated["members"]])
 
 @app.delete("/projects")
 async def delete_project(project_id: str, db=Depends(get_db)):
@@ -101,7 +152,7 @@ async def delete_project(project_id: str, db=Depends(get_db)):
 
 
 # === TASKS ===
-@app.get("/tasks", response_model=List[models.Task])
+@app.get("/tasks", response_model=List[Task])
 async def get_tasks(
     status: Optional[str] = None,
     priority: Optional[str] = None,
@@ -131,10 +182,10 @@ async def get_tasks(
             "assignee_name": user["full_name"] if user else "Неизвестно",
             "project_name": project["name"] if project else "Без проекта"
         }
-        tasks.append(models.Task(**task_data))
+        tasks.append(Task(**task_data))
     return tasks
 
-@app.get("/tasks/{task_id}", response_model=models.Task)
+@app.get("/tasks/{task_id}", response_model=Task)
 async def get_task_by_id(task_id: str, db=Depends(get_db)):
     if not ObjectId.is_valid(task_id):
         raise HTTPException(status_code=400, detail="Неверный формат ID")
@@ -157,10 +208,10 @@ async def get_task_by_id(task_id: str, db=Depends(get_db)):
         "assignee_name": user["full_name"] if user else "Неизвестно",
         "project_name": project["name"] if project else "Без проекта"
     }
-    return models.Task(**response_data)
+    return Task(**response_data)
 
-@app.post("/tasks", response_model=models.Task)
-async def create_task(task: models.TaskCreate, db=Depends(get_db)):
+@app.post("/tasks", response_model=Task)
+async def create_task(task: TaskCreate, db=Depends(get_db)):
     user = db.users.find_one({"username": task.assignee_name})
     if not user:
         raise HTTPException(status_code=400, detail=f"Пользователь '{task.assignee_name}' не найден")
@@ -193,7 +244,57 @@ async def create_task(task: models.TaskCreate, db=Depends(get_db)):
         "project_name": project["name"]
     }
 
-    return models.Task(**response_data)
+    return Task(**response_data)
+
+@app.put("/tasks", response_model=Task)
+async def update_task(task_id: str, task_update: TaskUpdate, db=Depends(get_db)):
+    if not ObjectId.is_valid(task_id):
+        raise HTTPException(status_code=400, detail="Неверный ID")
+    
+    update_data = {}
+    if task_update.title is not None:
+        update_data["title"] = task_update.title
+    if task_update.status is not None:
+        update_data["status"] = task_update.status
+    if task_update.priority is not None:
+        update_data["priority"] = task_update.priority
+    if task_update.assignee_name is not None:
+        user = db.users.find_one({"username": task_update.assignee_name})
+        if not user:
+            raise HTTPException(status_code=400, detail=f"Исполнитель '{task_update.assignee_name}' не найден")
+        update_data["assignee"] = user["_id"]
+    if task_update.project_name is not None:
+        project = db.projects.find_one({"name": task_update.project_name})
+        if not project:
+            raise HTTPException(status_code=400, detail=f"Проект '{task_update.project_name}' не найден")
+        update_data["project"] = project["_id"]
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="Не указано ни одного поля для обновления")
+    
+    result = db.tasks.update_one(
+        {"_id": ObjectId(task_id)},
+        {"$set": update_data}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Задача не найдена или данные не изменились")
+    
+    updated_task = db.tasks.find_one({"_id": ObjectId(task_id)})
+    user = db.users.find_one({"_id": updated_task["assignee"]})
+    project = db.projects.find_one({"_id": updated_task["project"]})
+    
+    response_data = {
+        "id": str(updated_task["_id"]),
+        "title": updated_task["title"],
+        "status": updated_task["status"],
+        "priority": updated_task["priority"],
+        "assignee": str(updated_task["assignee"]),
+        "project": str(updated_task["project"]),
+        "created_at": updated_task.get("created_at"),
+        "assignee_name": user["full_name"] if user else "Неизвестно",
+        "project_name": project["name"] if project else "Без проекта"
+    }
+    return Task(**response_data)
     
 @app.delete("/tasks")
 async def delete_task(task_id: str, db=Depends(get_db)):
@@ -263,3 +364,9 @@ async def user_summary(user_id: str, db=Depends(get_db)):
     ]
     result = list(db.tasks.aggregate(pipeline))
     return result
+    
+@app.get("/")
+async def read_root():
+    return FileResponse("index.html")
+
+app.mount("/", StaticFiles(directory=".", html=True), name="static")

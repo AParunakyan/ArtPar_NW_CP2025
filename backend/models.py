@@ -77,3 +77,23 @@ class Task(TaskCreate):
         arbitrary_types_allowed=True,
         json_encoders={ObjectId: str}
     )
+
+
+# === Обновление моделей в Swagger ===
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    email: Optional[str] = None
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    members: Optional[List[str]] = None
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assignee_name: Optional[str] = None
+    project_name: Optional[str] = None
