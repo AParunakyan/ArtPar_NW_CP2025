@@ -8,8 +8,9 @@
 
 ## Как запустить
 1. Клонируем репозиторий
-```git clone https://github.com/APArunakyan/ArtPar_NW_CP2025.git
-   cd ArtPar_NW_CP2025```
+```git clone https://github.com/APArunakyan/ArtPar_NW_CP2025.git```
+2. Через консоль входим в пространство проекта
+```cd ArtPar_NW_CP2025```
 3. Запускаем приложение
 ```sudo docker-compose up --build```
 4. Открываем проект в браузере
