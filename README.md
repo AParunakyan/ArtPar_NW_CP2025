@@ -8,11 +8,11 @@
 
 ## Как запустить
 1. Клонируем репозиторий
-```git clone https://github.com/APArunakyan/ArtPar_NW_CP2025.git```
-```cd ArtPar_NW_CP2025```
-2. Запускаем приложение
+```git clone https://github.com/APArunakyan/ArtPar_NW_CP2025.git
+   cd ArtPar_NW_CP2025```
+3. Запускаем приложение
 ```sudo docker-compose up --build```
-3. Открываем проект в браузере
+4. Открываем проект в браузере
 - http://localhost:8000 - главная страница с задачами, фильтрами, сводками
 - http://localhost:8000/docs - Swagger UI
 
