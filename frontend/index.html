@@ -32,7 +32,7 @@
             <option value="Medium">Средний</option>
             <option value="High">Высокий</option>
         </select>
-        <input type="text" id="assigneeFilter" placeholder="ID исполнителя (например 671f8a1b...)">
+        <input type="text" id="assigneeFilter" placeholder="ID исполнителя">
         <button onclick="loadTasks()">Фильтр</button>
         <button onclick="clearFilters()">Сброс</button>
     </div>
@@ -62,8 +62,9 @@
     </table>
 
     <script>
-        const API = "http://127.0.0.1:8000";
+        const API = "http://127.0.0.1:8000"; //базовый URL API
 
+        //универсальная функция для GET-запросов
         async function get(url) {
             try {
                 const r = await fetch(API + url);
@@ -74,7 +75,8 @@
                 return [];
             }
         }
-
+        
+        //загрузка задач с фильтрами
         async function loadTasks() {
         let url = "/tasks";
         const params = new URLSearchParams();
@@ -102,6 +104,7 @@
             `).join("");
         }
 
+        //сброс фильтров
         function clearFilters() {
             document.getElementById("statusFilter").value = "";
             document.getElementById("priorityFilter").value = "";
@@ -109,6 +112,7 @@
             loadTasks();
         }
 
+        //загрузка пользователей
         async function loadUsers() {
             const data = await get("/users");
             const tbody = document.querySelector("#usersTable tbody");
@@ -122,6 +126,7 @@
                 </tr>`).join("");
         }
 
+        //загрузка сводки по проектам
         async function loadProjectSummary() {
         const data = await get("/summary/projects");
         const tbody = document.getElementById("projectSummaryBody");
@@ -137,16 +142,17 @@
                     <td>${r.assignee_name || "—"}</td>
                 </tr>
             `).join("");
-
-        if (data.length > 0 && !document.querySelector("#projectSummary thead")) {
+        
+        //добавление заголовка таблицы, если есть данные
+        if (data.length > 0 && !document.querySelector("#projectSummary thead"))
             document.getElementById("projectSummary").insertAdjacentHTML("afterbegin", `
                 <thead><tr>
                     <th>Проект</th><th>Задача</th><th>Статус</th><th>Исполнитель</th>
                 </tr></thead>
             `);
         }
-}
-
+        
+        //загрузка задач конкретного пользователя
         async function loadUserSummary() {
             const id = document.getElementById("userIdInput").value.trim();
             const data = await get(`/summary/user/${id}`);
@@ -161,6 +167,7 @@
             document.getElementById("userSummaryTable").style.display = "table";
         }
 
+        //загрузка задач конкретного пользователя
         window.onload = () => {
             loadTasks();
             loadUsers();

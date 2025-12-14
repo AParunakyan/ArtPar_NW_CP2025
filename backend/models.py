@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic_core import core_schema
 
 class PyObjectId(str):
+    #класс для корректной работы ObjectId в Pydantic v2
     @classmethod
     def __get_pydantic_core_schema__(cls, source_type: Any, handler) -> core_schema.CoreSchema:
         return core_schema.union_schema(
@@ -26,7 +27,7 @@ class PyObjectId(str):
         raise ValueError("Invalid ObjectId")
 
 
-# === Модели для создания в Swagger ===
+# === Модели для создания элементов в Swagger ===
 
 class UserCreate(BaseModel):
     username: str

@@ -8,37 +8,43 @@ from bson import ObjectId
 from datetime import datetime
 from pydantic import BaseModel
 
+#импорт всех моделей
 from backend.models import (
     User, UserCreate, UserUpdate,
     Project, ProjectCreate, ProjectUpdate,
     Task, TaskCreate, TaskUpdate
 )
-from backend.database import get_db
+from backend.database import get_db #функция для получения подключения к MongoDB
 
+#создание основного объекта FastAPI
 app = FastAPI(
     title="Task Tracker",
     version="2.0"
 )
 
+#настройка CORS — разрешает запросы с любого фронтенда (важно для локального index.html)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], #разрешены все источники
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"], #все HTTP-методы (GET, POST, PUT, DELETE)
+    allow_headers=["*"], #все заголовки
 )
 
 
-# === USERS ===
+# === ПОЛЬЗОВАТЕЛИ ===
 @app.get("/users", response_model=List[User])
 async def get_users(db=Depends(get_db)):
+    #возврат списка всех пользователей
     return [User(**doc, id=str(doc["_id"])) for doc in db.users.find()]
 
 @app.post("/users", response_model=User)
 async def create_user(user: UserCreate, db=Depends(get_db)):
-    result = db.users.insert_one(user.model_dump())
-    created = db.users.find_one({"_id": result.inserted_id})
-
+    #создание нового пользователя на основе данных из формы
+    result = db.users.insert_one(user.model_dump()) #вставка в коллекцию users
+    created = db.users.find_one({"_id": result.inserted_id}) #поиск созданного документа
+    
+    #возврат созданного пользователя с параметрами
     return User(
         id=str(created["_id"]),
         username=created["username"],
@@ -49,32 +55,35 @@ async def create_user(user: UserCreate, db=Depends(get_db)):
 
 @app.put("/users", response_model=User)
 async def update_user(user_id: str, user_update: UserCreate, db=Depends(get_db)):
+    #обновление данных пользователя
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Неверный ID")
     
     result = db.users.update_one(
         {"_id": ObjectId(user_id)},
-        {"$set": user_update.model_dump()}
+        {"$set": user_update.model_dump()} 
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Пользователь не найден или данные не изменились")
     
     updated = db.users.find_one({"_id": ObjectId(user_id)})
-    return User(**updated, id=str(updated["_id"]))
+    return User(**updated, id=str(updated["_id"])) #возврат пользователя с измененными параметрами
     
 @app.delete("/users")
 async def delete_user(user_id: str, db=Depends(get_db)):
+    #удаление пользователя
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="Неверный формат ID пользователя")
-    result = db.users.delete_one({"_id": ObjectId(user_id)})
+    result = db.users.delete_one({"_id": ObjectId(user_id)}) #удаление
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
-    return {"detail": "Пользователь успешно удалён", "id": user_id}
+    return {"detail": "Пользователь успешно удалён", "id": user_id} #возврат информации о удалении
 
 
-# === PROJECTS ===
+# === ПРОЕКТЫ ===
 @app.get("/projects", response_model=List[Project])
 async def get_projects(db=Depends(get_db)):
+    #возврат списка всех проектов
     projects = []
     for doc in db.projects.find():
         doc["id"] = str(doc["_id"])
@@ -84,6 +93,7 @@ async def get_projects(db=Depends(get_db)):
 
 @app.post("/projects", response_model=Project)
 async def create_project(project: ProjectCreate, db=Depends(get_db)):
+    #создание нового проекта на основе данных из формы
     member_ids = []
     for username in project.members:
         user = db.users.find_one({"username": username})
@@ -151,7 +161,7 @@ async def delete_project(project_id: str, db=Depends(get_db)):
     }
 
 
-# === TASKS ===
+# === ЗАДАЧИ ===
 @app.get("/tasks", response_model=List[Task])
 async def get_tasks(
     status: Optional[str] = None,
@@ -251,6 +261,7 @@ async def update_task(task_id: str, task_update: TaskUpdate, db=Depends(get_db))
     if not ObjectId.is_valid(task_id):
         raise HTTPException(status_code=400, detail="Неверный ID")
     
+    #проверка и обновление полей задачи
     update_data = {}
     if task_update.title is not None:
         update_data["title"] = task_update.title
@@ -269,6 +280,7 @@ async def update_task(task_id: str, task_update: TaskUpdate, db=Depends(get_db))
             raise HTTPException(status_code=400, detail=f"Проект '{task_update.project_name}' не найден")
         update_data["project"] = project["_id"]
     
+    #если изменений не было
     if not update_data:
         raise HTTPException(status_code=400, detail="Не указано ни одного поля для обновления")
     
@@ -279,10 +291,12 @@ async def update_task(task_id: str, task_update: TaskUpdate, db=Depends(get_db))
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Задача не найдена или данные не изменились")
     
+    #поиск задачи, исполнителя и проекта по id
     updated_task = db.tasks.find_one({"_id": ObjectId(task_id)})
     user = db.users.find_one({"_id": updated_task["assignee"]})
     project = db.projects.find_one({"_id": updated_task["project"]})
     
+    #возврат задачи (с изменениями или без)
     response_data = {
         "id": str(updated_task["_id"]),
         "title": updated_task["title"],
@@ -306,9 +320,10 @@ async def delete_task(task_id: str, db=Depends(get_db)):
     return {"detail": "Задача успешно удалена", "task_id": task_id}
 
 
-# === SUMMARY ===
+# === СВОДКА ===
 @app.get("/summary/projects")
 async def project_summary(db=Depends(get_db)):
+    #возврат сводки "Загрузка по проектам"
     pipeline = [
         {"$lookup": {
             "from": "projects",
@@ -337,6 +352,7 @@ async def project_summary(db=Depends(get_db)):
 
 @app.get("/summary/user/{user_id}")
 async def user_summary(user_id: str, db=Depends(get_db)):
+    #возврат сводки "Задачи пользователя"
     if not ObjectId.is_valid(user_id):
         return []
 
@@ -367,6 +383,8 @@ async def user_summary(user_id: str, db=Depends(get_db)):
     
 @app.get("/")
 async def read_root():
+    #возврат главной страницы приложения
     return FileResponse("index.html")
 
+#монтирование текущей директории как статической — для доступа к index.html и другим файлам
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
